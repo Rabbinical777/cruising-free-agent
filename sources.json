@@ -1,0 +1,5 @@
+[
+  {"key":"studytrust","url":"https://studytrust.org.za/bursaries/","hosts":["studytrust.org.za","www.studytrust.org.za"],"enabled":true},
+  {"key":"careerwise","url":"https://careerwise.co.za/","hosts":["careerwise.co.za","www.careerwise.co.za"],"enabled":true},
+  {"key":"zabursaries","url":"https://www.zabursaries.co.za/","hosts":["www.zabursaries.co.za","zabursaries.co.za"],"enabled":false,"note":"Disabled: automated request returned HTTP 406. Do not bypass blocks."}
+]
