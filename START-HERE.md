@@ -1,113 +1,83 @@
-# Cruising — free daily bursary checker
+# Cruising checker upgrade — 14 October 2026
 
-This replacement uses no OpenAI API and no paid search API. It checks selected website pages once a day and stores bursary-related links for manual review in Supabase. It is a rule-based website monitor, not an AI researcher.
+This is an upgrade for your existing cruising-free-agent repository, not a new project.
+It uses Python's standard library, GitHub Actions and your existing Supabase secrets.
+No OpenAI API or paid search API is called. Hosting quotas still apply.
 
-## What it does
+## Install in this order
 
-- Checks StudyTrust's bursaries page and CareerWise's homepage.
-- Respects robots.txt, fetches only configured pages and limits request sizes/time.
-- Finds links whose text or URL mentions bursaries or scholarships.
-- Saves new URLs once, with source and discovery date. Repeat runs preserve existing review status.
-- Records source failures and warns about empty results.
-- Runs on GitHub around 07:17 South African time daily, even when your laptop is off. Scheduled runs can be delayed or missed; inspect run history.
-
-SA Bursaries is configured but disabled because the initial automated request returned HTTP 406. Do not bypass website blocks. Add sources only after checking their terms and automation permissions.
-
-## Limits — please read
-
-These are **unverified links**, which may include general information pages or old bursaries. No funding year, deadlines, eligibility or open status is inferred. The first run is a baseline: a newly saved link does not mean the bursary was newly announced. Existing URLs that change content are not detected as new opportunities. This monitors selected pages, not the whole internet, PDFs or JavaScript-rendered listings.
-
-This package does not implement student alerts, automatic applications, marks matching, weekly emails or deadline reminders. Keep discoveries private until you check the official provider and transfer confirmed details into your app's verified opportunities. Review in Supabase Table Editor; do not expose a backend key to students.
-
-## Step 1 — create the tables
-
-1. Extract this ZIP to a NEW folder. Do not replace your old core.mjs with this package.
-2. Open `01-setup.sql` in Notepad and copy all its contents.
-3. In Supabase, select your Cruising project → SQL Editor → New query.
-4. Paste and click Run. “Success. No rows returned” is expected.
-
-The tables are `bursary_discoveries` and `bursary_free_runs`. They have Row Level Security and no public/student access. Existing app tables are unchanged.
-
-## Step 2 — put the checker in a private GitHub repository
-
-1. Sign in to https://github.com and create a new **private**, empty repository called `cruising-free-agent`. Do not add a README on GitHub yet.
-2. Open the extracted `Cruising-Free-Agent` folder. It should contain checker.py, sources.json and START-HERE.md.
-3. Click File Explorer's address bar, type `powershell`, press Enter.
-4. Run these commands one at a time:
+1. In Supabase SQL Editor, run the complete contents of `02-upgrade.sql`.
+   This preserves existing discoveries and review decisions. It adds a restricted
+   page-check table and a function callable only by your backend service role.
+2. Copy all files from this package into your existing folder, replacing matching files:
+   `C:\Users\Rabbinical Kgafela\Downloads\Cruising-Free-Agent (1)\Cruising-Free-Agent`
+   Include `.github/workflows/daily.yml`. Keep your existing `.git` folder and `.gitignore`.
+3. Open PowerShell in that existing folder, then run these commands one at a time:
 
 ```powershell
-git init
-git add .
-git commit -m "Add free daily bursary checker"
-git branch -M main
+git add checker.py sources.json test_checker.py test_upgrade.py 02-upgrade.sql START-HERE.md .github/workflows/daily.yml
+git commit -m "Monitor bursary page changes and add government sources"
+git push origin main
 ```
 
-If Git asks for your name/email, configure those locally, then rerun the commit:
+4. On GitHub, open Actions → Cruising free daily checker → Run workflow → Run workflow.
+   Wait for completion and read the summary. Your existing secrets need no changes.
 
-```powershell
-git config user.name "YOUR NAME"
-git config user.email "YOUR GITHUB EMAIL"
+## What changed
+
+- Existing discovery URLs still deduplicate safely. Review status is never overwritten.
+- Six same-host detail pages per directory are checked per run, rotating daily.
+  It takes multiple daily runs to revisit all pages; this does not check every listing daily.
+- Each successful detail check records a text fingerprint, last-check time, last-change
+  time and limited deadline/requirement excerpts in `bursary_page_checks`.
+- First checks establish a baseline; they are not counted as changed pages.
+- Funza Lushaka and DFFE programme pages are added as two specific government sources.
+  These can be saved even if a programme is closed: listings remain pending review.
+- The workflow reports new links, detail pages checked, changed pages and failures.
+- Robots restrictions, blocked pages and non-HTML documents are not bypassed.
+- Checkout uses v7; Ubuntu is pinned to 24.04; each job has an eight-minute limit.
+
+## What this does not claim
+
+This is a rule-based monitor, not a general AI web researcher. It does not guarantee
+new bursaries daily. A changed fingerprint can reflect editorial changes, not a new
+funding round. Dates and eligibility excerpts need review; no dates are guessed.
+PDFs, external-host detail pages and JavaScript-only content need separate support.
+Links that disappear from source pages are not automatically marked closed.
+
+Your current app will continue loading discoveries, including new source listings.
+The app has NOT been modified by this package: last-check times and evidence are
+stored in Supabase but still need frontend integration to appear on cards.
+This package does not activate course matching, notifications or applications.
+
+## Inspect results in Supabase
+
+```sql
+select d.title, d.source_key, p.last_checked_at, p.last_changed_at,
+       p.deadline_evidence, p.requirement_evidence
+from public.bursary_page_checks p
+join public.bursary_discoveries d on d.url = p.url
+order by p.last_checked_at desc;
 ```
 
-5. Replace YOUR-USERNAME below with your actual GitHub username:
+## Troubleshooting
 
-```powershell
-git remote add origin https://github.com/YOUR-USERNAME/cruising-free-agent.git
-git push -u origin main
-```
+- Database HTTP 404: confirm you ran `02-upgrade.sql` on the same Supabase project.
+- Database HTTP 401/403: check the existing GitHub backend secret; never put it in app code.
+- Source or robots errors: review the reported source manually. Other sources can still save.
+- Zero new saved: discovered URLs already exist. Check detail-page counts separately.
+- No page-check rows: read the workflow's individual page error messages.
 
-Complete browser sign-in if prompted. The `.github/workflows/daily.yml` file must be uploaded too; `git add .` includes it. Never upload secret values, passwords, or your old API key.
+## Validation
 
-## Step 3 — add two GitHub Actions secrets
+14 offline unit tests cover existing URL safety/deduplication plus evidence extraction,
+content-change detection, rotation coverage and excluded external/PDF detail fetches.
+Live database writes require your first GitHub run after applying the SQL migration.
 
-In the new GitHub repository go to Settings → Secrets and variables → Actions → New repository secret.
+## Rollback
 
-Create:
+Use GitHub to revert the upgrade commit if needed. The extra SQL table/function can
+remain: the old checker does not use them. Do not delete existing discoveries.
 
-| Name | Value |
-| --- | --- |
-| SUPABASE_URL | https://ekhptaxrcamkejnfgico.supabase.co |
-| SUPABASE_SERVICE_ROLE_KEY | Your project's legacy `service_role` backend API key |
-
-Find the service_role key in Supabase project settings → API Keys → legacy anon/service_role keys. This is NOT the publishable key, database password, OPENAI_API_KEY or CRUISING_AGENT_SECRET. It grants administrative database access: paste it only into the GitHub secret box. Never send it in chat or put it into code. Only trusted administrators should have write access to this repository because workflows can use its secrets.
-
-## Step 4 — keep it within free limits
-
-Use your existing Supabase **Free** organization and GitHub **Free**, with the standard `ubuntu-latest` runner already configured here. This workflow has a five-minute job timeout: 31 scheduled runs budget about 155 runner minutes monthly, plus manual runs. GitHub Free includes 2,000 minutes monthly for private repositories, shared with your other workflows. This package uploads no build artifacts and installs no dependencies.
-
-Before enabling, check GitHub account Settings → Billing and licensing → Budgets and alerts. Set an Actions budget of $0 with **Stop usage when budget limit is reached** enabled where available. Do not enable paid overages or larger runners. Check shared usage periodically. Free-tier limits and platform policies may change; free hosting is not an unlimited-service guarantee. Supabase may pause low-activity Free projects; resume in its dashboard if needed. Monitor database space as records accumulate.
-
-References checked October 4, 2026:
-- https://docs.github.com/en/billing/reference/product-usage-included
-- https://docs.github.com/en/billing/how-tos/set-up-budgets
-- https://supabase.com/pricing
-- https://supabase.com/docs/guides/platform/free-project-pausing
-- https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
-
-## Step 5 — test and enable
-
-The schedule becomes active once daily.yml is on the repository's default branch and Actions is enabled.
-
-1. Open GitHub repository → Actions → Cruising free daily checker → Run workflow.
-2. Open the run. Both the tests and checker should pass.
-3. In Supabase Table Editor, open `bursary_discoveries` to inspect saved links. Open `bursary_free_runs` for check results.
-4. Run again if needed: existing links should produce zero new inserts. This is normal.
-
-A warning/failed source makes the workflow fail visibly, while successful sources can still save their links. A database HTTP 401/403 suggests the key/permissions need checking; 404 often means the SQL tables were not created in the configured project. Never paste secrets into logs or support messages.
-
-To stop: GitHub → Actions → this workflow → menu → Disable workflow.
-
-## Stop the old paid agent
-
-This checker does not invoke the old Supabase `bursary-agent` function. Do not continue testing that old function or enable its previous SQL schedule. If you already enabled a Cron job for the old function, disable only that bursary job in Supabase Cron. You may remove OPENAI_API_KEY from Supabase Edge Function secrets if no other function needs it; that makes the old worker refuse paid searches. Existing saved data can stay.
-
-## Optional local test
-
-Python is already installed on the GitHub runner; you do not need to install it on Windows for the hosted setup. With Python 3.11+ locally:
-
-```powershell
-python -m unittest -v
-python checker.py --dry-run
-```
-
-Dry run makes public website requests but needs no database key and writes no data. No Supabase production write has been tested by the package author because your private backend key is not available.
+Live website testing in the build environment did not complete and was stopped.
+The first GitHub run must confirm source access and database writes.

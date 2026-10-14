@@ -1,5 +1,52 @@
 [
-  {"key":"studytrust","url":"https://studytrust.org.za/bursaries/","hosts":["studytrust.org.za","www.studytrust.org.za"],"enabled":true},
-  {"key":"careerwise","url":"https://careerwise.co.za/","hosts":["careerwise.co.za","www.careerwise.co.za"],"enabled":true},
-  {"key":"zabursaries","url":"https://www.zabursaries.co.za/","hosts":["www.zabursaries.co.za","zabursaries.co.za"],"enabled":false,"note":"Disabled: automated request returned HTTP 406. Do not bypass blocks."}
+  {
+    "key": "studytrust",
+    "url": "https://studytrust.org.za/bursaries/",
+    "hosts": [
+      "studytrust.org.za",
+      "www.studytrust.org.za"
+    ],
+    "enabled": true
+  },
+  {
+    "key": "careerwise",
+    "url": "https://careerwise.co.za/",
+    "hosts": [
+      "careerwise.co.za",
+      "www.careerwise.co.za"
+    ],
+    "enabled": true
+  },
+  {
+    "key": "zabursaries",
+    "url": "https://www.zabursaries.co.za/",
+    "hosts": [
+      "www.zabursaries.co.za",
+      "zabursaries.co.za"
+    ],
+    "enabled": false,
+    "note": "Disabled: automated request returned HTTP 406. Do not bypass blocks."
+  },
+  {
+    "key": "funza_lushaka",
+    "url": "https://www.funzalushaka.doe.gov.za/Home/",
+    "hosts": [
+      "www.funzalushaka.doe.gov.za",
+      "funzalushaka.doe.gov.za"
+    ],
+    "kind": "programme",
+    "title": "Funza Lushaka Bursary Programme",
+    "enabled": true
+  },
+  {
+    "key": "dffe",
+    "url": "https://www.dffe.gov.za/index.php/bursaries",
+    "hosts": [
+      "www.dffe.gov.za",
+      "dffe.gov.za"
+    ],
+    "kind": "programme",
+    "title": "DFFE bursary programme",
+    "enabled": true
+  }
 ]

@@ -1,5 +1,6 @@
 """Cruising's free, fixed-source link monitor. Python 3.11+, no dependencies."""
 import argparse
+import hashlib
 import ipaddress
 import json
 import os
@@ -15,7 +16,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.robotparser import RobotFileParser
 
 ROOT = Path(__file__).resolve().parent
-UA = 'CruisingBursaryMonitor/1.0'
+UA = 'CruisingBursaryMonitor/2.0'
 MAX_BYTES = 3_000_000
 
 class CheckError(Exception):
@@ -61,6 +62,8 @@ def fetch_page(url, hosts):
         raise CheckError('Source host not allowed')
     opener = build_opener(SafeRedirect(hosts))
     with opener.open(Request(target, headers={'User-Agent': UA, 'Accept': 'text/html,text/plain'}), timeout=15) as r:
+        if r.headers.get_content_type() not in ('text/html', 'text/plain', 'application/xhtml+xml'):
+            raise CheckError('Non-HTML page; manual review needed')
         content = r.read(MAX_BYTES + 1)
         if len(content) > MAX_BYTES:
             raise CheckError('Source response exceeds size limit')
@@ -132,6 +135,51 @@ def extract_links(html, base, source):
         raise CheckError('Too many links; review source layout')
     return list(found.values())
 
+
+class PageText(HTMLParser):
+    """Extract visible text; ignore scripts, styling and repeated navigation."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.hidden = []
+        self.parts = []
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style', 'nav', 'footer', 'noscript'):
+            self.hidden.append(tag)
+    def handle_endtag(self, tag):
+        if self.hidden and tag == self.hidden[-1]:
+            self.hidden.pop()
+        if not self.hidden and tag in ('p', 'li', 'div', 'h1', 'h2', 'h3', 'tr'):
+            self.parts.append('\n')
+    def handle_data(self, data):
+        if not self.hidden:
+            self.parts.append(data)
+
+def page_evidence(html):
+    parser = PageText()
+    parser.feed(html)
+    lines = [' '.join(x.split()) for x in ''.join(parser.parts).splitlines()]
+    lines = [x for x in lines if x]
+    text = '\n'.join(lines)
+    if len(text) < 80:
+        raise CheckError('Too little visible text; page may require JavaScript')
+    # These are excerpts, NOT verified eligibility or parsed dates.
+    deadline = [x[:700] for x in lines if re.search(r'closing|deadline|applications? (?:close|open)', x, re.I)][:6]
+    requirements = [x[:700] for x in lines if re.search(r'eligib|requirement|citizen|minimum|grade 12|matric|household|qualif', x, re.I)][:10]
+    return {'content_hash': hashlib.sha256(text.encode()).hexdigest(),
+            'deadline_evidence': deadline, 'requirement_evidence': requirements}
+
+def detail_batch(items, source, day=None):
+    # Rotate a bounded batch so all discovered same-host pages get revisited.
+    items = sorted([x for x in items if urlsplit(x['url']).hostname in source['hosts']
+                    and not urlsplit(x['url']).path.lower().endswith(('.pdf', '.doc', '.docx', '.zip'))],
+                   key=lambda x: x['url'])
+    if not items:
+        return []
+    limit = min(int(source.get('detail_limit', 6)), len(items))
+    day = datetime.now(timezone.utc).date().toordinal() if day is None else day
+    start = day * limit % len(items)
+    return [items[(start + i) % len(items)] for i in range(limit)]
+
 class Database:
     def __init__(self):
         self.url = os.environ.get('SUPABASE_URL', '').rstrip('/')
@@ -148,6 +196,12 @@ class Database:
                 return json.loads(body) if body else []
         except HTTPError as e:
             raise CheckError('Database HTTP ' + str(e.code) + '; check SQL setup and backend key') from None
+    def observe(self, item, evidence):
+        return self.post('rpc/record_bursary_page_check', {
+            'p_url': item['url'], 'p_hash': evidence['content_hash'],
+            'p_deadlines': evidence['deadline_evidence'],
+            'p_requirements': evidence['requirement_evidence']}, 'return=representation')
+
     def save(self, items):
         if not items:
             return 0
@@ -183,9 +237,32 @@ def main():
             time.sleep(allowed_delay(source['url'], source['hosts']))
             html, base = fetch_page(source['url'], source['hosts'])
             items = extract_links(html, base, source)
+            if source.get('kind') == 'programme':
+                items = [{'url': canonical_url(base), 'title': source['title'],
+                          'source_key': source['key'], 'source_url': source['url'],
+                          'status': 'pending_review'}]
+
             record.update(status='succeeded' if items else 'warning', links_found=len(items))
             if db:
                 record['inserted_count'] = db.save(items)
+            checked = changed = failed = 0
+            for item in detail_batch(items, source):
+                try:
+                    if item['url'] == canonical_url(base):
+                        detail_html = html
+                    else:
+                        time.sleep(allowed_delay(item['url'], source['hosts']))
+                        detail_html, _ = fetch_page(item['url'], source['hosts'])
+                    evidence = page_evidence(detail_html)
+                    result = db.observe(item, evidence) if db else {}
+                    checked += 1
+                    changed += int(result.get('changed', False))
+                except Exception as e:
+                    failed += 1
+                    print(json.dumps({'source': source['key'], 'page': item['url'], 'error': safe_error(e)}))
+            record['message'] = f'{checked} detail pages checked; {changed} changed; {failed} detail checks failed. Excerpts require review.'
+            if failed:
+                record['status'] = 'warning'
             if not items:
                 record['message'] = 'No matching links extracted; check source manually. This is not proof of no bursaries.'
         except Exception as e:
@@ -197,8 +274,8 @@ def main():
             except Exception as e:
                 record.update(status='failed', message=safe_error(e))
         results.append(record)
-        print(json.dumps(record))
-    summary = '\n'.join(f"- {r['source_key']}: {r['status']}; {r['links_found']} links; {r['inserted_count']} new saved" for r in results)
+        print(json.dumps(record), flush=True)
+    summary = '\n'.join(f"- {r['source_key']}: {r['status']}; {r['links_found']} links; {r['inserted_count']} new saved; {r.get('message', '')}" for r in results)
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
             f.write('## Cruising free checker\n' + summary + '\n\nAll discoveries need review.\n')
