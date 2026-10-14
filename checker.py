@@ -6,6 +6,8 @@ import json
 import os
 import re
 import sys
+import ssl
+import socket
 import time
 from datetime import datetime, timezone
 from html.parser import HTMLParser
@@ -171,7 +173,8 @@ def page_evidence(html):
 def detail_batch(items, source, day=None):
     # Rotate a bounded batch so all discovered same-host pages get revisited.
     items = sorted([x for x in items if urlsplit(x['url']).hostname in source['hosts']
-                    and not urlsplit(x['url']).path.lower().endswith(('.pdf', '.doc', '.docx', '.zip'))],
+                    and not urlsplit(x['url']).path.lower().endswith(('.pdf', '.doc', '.docx', '.zip'))
+                    and urlsplit(x['url']).path.rstrip('/').lower() not in ('/preregistration', '/login', '/register')],
                    key=lambda x: x['url'])
     if not items:
         return []
@@ -214,8 +217,22 @@ def safe_error(e):
         return str(e)
     if isinstance(e, HTTPError):
         return 'Source HTTP ' + str(e.code)
-    if isinstance(e, (TimeoutError, URLError)):
-        return 'Network request failed or timed out'
+    reason = e.reason if isinstance(e, URLError) else e
+    if isinstance(reason, ssl.SSLCertVerificationError):
+        return 'TLS certificate verification failed; secure connection refused'
+    if isinstance(reason, ssl.SSLError):
+        return 'TLS handshake failed'
+    if isinstance(reason, socket.gaierror):
+        return 'DNS lookup failed'
+    if isinstance(reason, TimeoutError):
+        return 'Connection timed out'
+    if isinstance(reason, ConnectionRefusedError):
+        return 'Connection refused by host'
+    if isinstance(reason, ConnectionResetError):
+        return 'Connection reset by host'
+    if isinstance(e, URLError):
+        return 'Network request failed (' + type(reason).__name__ + ')'
+
     return 'Unexpected ' + type(e).__name__ + '; inspect configuration'
 
 def main():
@@ -233,8 +250,10 @@ def main():
         if not source.get('enabled'):
             continue
         record = {'source_key': source['key'], 'status': 'failed', 'links_found': 0, 'inserted_count': 0}
+        stage = 'robots_check'
         try:
             time.sleep(allowed_delay(source['url'], source['hosts']))
+            stage = 'source_page'
             html, base = fetch_page(source['url'], source['hosts'])
             items = extract_links(html, base, source)
             if source.get('kind') == 'programme':
@@ -244,6 +263,7 @@ def main():
 
             record.update(status='succeeded' if items else 'warning', links_found=len(items))
             if db:
+                stage = 'save_discoveries'
                 record['inserted_count'] = db.save(items)
             checked = changed = failed = 0
             for item in detail_batch(items, source):
@@ -266,7 +286,7 @@ def main():
             if not items:
                 record['message'] = 'No matching links extracted; check source manually. This is not proof of no bursaries.'
         except Exception as e:
-            record['message'] = safe_error(e)
+            record['message'] = stage + ': ' + safe_error(e)
         record['checked_at'] = datetime.now(timezone.utc).isoformat()
         if db:
             try:
