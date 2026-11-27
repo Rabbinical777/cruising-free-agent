@@ -139,5 +139,34 @@ class MainTests(unittest.TestCase):
         self.assertIn('::warning', text)
 
 
+class SourcesFileTests(unittest.TestCase):
+    def setUp(self):
+        self.sources = json.loads((c.ROOT / 'sources.json').read_text())
+
+    def test_keys_are_unique(self):
+        keys = [s['key'] for s in self.sources]
+        self.assertEqual(len(keys), len(set(keys)))
+
+    def test_every_source_url_is_safe_and_on_an_allowed_host(self):
+        from urllib.parse import urlsplit
+        for s in self.sources:
+            host = urlsplit(c.canonical_url(s['url'])).hostname
+            self.assertIn(host, s['hosts'], s['key'])
+
+    def test_every_source_has_a_valid_tier(self):
+        for s in self.sources:
+            self.assertIn(s.get('tier'), ('official', 'lead'), s['key'])
+
+    def test_programme_sources_have_a_title(self):
+        for s in self.sources:
+            if s.get('kind') == 'programme':
+                self.assertTrue(s.get('title'), s['key'])
+
+    def test_no_aggregator_is_marked_official(self):
+        for s in self.sources:
+            if s['key'] in ('studytrust', 'careerwise', 'zabursaries'):
+                self.assertEqual(s['tier'], 'lead')
+
+
 if __name__ == '__main__':
     unittest.main()
