@@ -18,7 +18,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.robotparser import RobotFileParser
 
 ROOT = Path(__file__).resolve().parent
-UA = 'CruisingBursaryMonitor/2.0'
+UA = 'CruisingBursaryMonitor/2.1 (+https://github.com/Rabbinical777/cruising-free-agent)'
 MAX_BYTES = 3_000_000
 
 class CheckError(Exception):
@@ -71,15 +71,23 @@ def fetch_page(url, hosts):
             raise CheckError('Source response exceeds size limit')
         return content.decode(r.headers.get_content_charset() or 'utf-8', errors='replace'), r.geturl()
 
-def allowed_delay(url, hosts, fetch=fetch_page):
+def allowed_delay(url, hosts, fetch=fetch_page, cache=None):
     origin = urlsplit(url)
     robots_url = urlunsplit((origin.scheme, origin.netloc, '/robots.txt', '', ''))
-    try:
-        text, _ = fetch(robots_url, hosts)
-    except HTTPError as e:
-        if e.code in (404, 410):
-            return 1
-        raise CheckError('Robots unavailable; source skipped') from None
+    key = origin.netloc.lower()
+    if cache is not None and key in cache:
+        text = cache[key]          # None means robots.txt does not exist (404/410)
+    else:
+        try:
+            text, _ = fetch(robots_url, hosts)
+        except HTTPError as e:
+            if e.code not in (404, 410):
+                raise CheckError('Robots unavailable; source skipped') from None
+            text = None
+        if cache is not None:
+            cache[key] = text
+    if text is None:
+        return 1
     parser = RobotFileParser()
     parser.parse(text.splitlines())
     if not parser.can_fetch(UA, url):
@@ -132,7 +140,8 @@ def extract_links(html, base, source):
         if urlsplit(url).path.lower().endswith(('.jpg', '.png', '.svg', '.css', '.js')):
             continue
         found[url] = {'url': url, 'title': (title or urlsplit(url).path)[:500],
-                      'source_key': source['key'], 'source_url': source['url'], 'status': 'pending_review'}
+                      'source_key': source['key'], 'source_url': source['url'], 'status': 'pending_review',
+                      'tier': source.get('tier', 'lead')}
     if len(found) > 150:
         raise CheckError('Too many links; review source layout')
     return list(found.values())
@@ -199,6 +208,11 @@ class Database:
                 return json.loads(body) if body else []
         except HTTPError as e:
             raise CheckError('Database HTTP ' + str(e.code) + '; check SQL setup and backend key') from None
+        except URLError as e:
+            raise CheckError('Database unreachable (' + safe_error(e) + '); check SUPABASE_URL and that the '
+                             'Supabase project is not paused') from None
+    def rpc(self, name):
+        return self.post('rpc/' + name, {}, 'return=representation')
     def observe(self, item, evidence):
         return self.post('rpc/record_bursary_page_check', {
             'p_url': item['url'], 'p_hash': evidence['content_hash'],
@@ -235,6 +249,16 @@ def safe_error(e):
 
     return 'Unexpected ' + type(e).__name__ + '; inspect configuration'
 
+def exit_code(results, db_failed):
+    """Fail the run only for real outages, not because one source has a bad day.
+
+    Per-source problems still appear in the run summary and as GitHub warnings."""
+    if not results or db_failed:
+        return 1
+    if all(r['status'] == 'failed' for r in results):
+        return 1
+    return 0
+
 def main():
     arg = argparse.ArgumentParser(description=__doc__)
     arg.add_argument('--dry-run', action='store_true', help='Read websites without database writes')
@@ -246,32 +270,35 @@ def main():
         print(safe_error(e))
         return 1
     results = []
+    db_failed = False
+    robots_cache = {}
     for source in sources:
         if not source.get('enabled'):
             continue
         record = {'source_key': source['key'], 'status': 'failed', 'links_found': 0, 'inserted_count': 0}
         stage = 'robots_check'
         try:
-            time.sleep(allowed_delay(source['url'], source['hosts']))
+            time.sleep(allowed_delay(source['url'], source['hosts'], cache=robots_cache))
             stage = 'source_page'
             html, base = fetch_page(source['url'], source['hosts'])
             items = extract_links(html, base, source)
             if source.get('kind') == 'programme':
                 items = [{'url': canonical_url(base), 'title': source['title'],
                           'source_key': source['key'], 'source_url': source['url'],
-                          'status': 'pending_review'}]
+                          'status': 'pending_review', 'tier': source.get('tier', 'lead')}]
 
             record.update(status='succeeded' if items else 'warning', links_found=len(items))
             if db:
                 stage = 'save_discoveries'
                 record['inserted_count'] = db.save(items)
+            stage = 'detail_pages'
             checked = changed = failed = 0
             for item in detail_batch(items, source):
                 try:
                     if item['url'] == canonical_url(base):
                         detail_html = html
                     else:
-                        time.sleep(allowed_delay(item['url'], source['hosts']))
+                        time.sleep(allowed_delay(item['url'], source['hosts'], cache=robots_cache))
                         detail_html, _ = fetch_page(item['url'], source['hosts'])
                     evidence = page_evidence(detail_html)
                     result = db.observe(item, evidence) if db else {}
@@ -287,19 +314,34 @@ def main():
                 record['message'] = 'No matching links extracted; check source manually. This is not proof of no bursaries.'
         except Exception as e:
             record['message'] = stage + ': ' + safe_error(e)
+            if stage == 'save_discoveries':
+                db_failed = True
         record['checked_at'] = datetime.now(timezone.utc).isoformat()
         if db:
             try:
                 db.post('bursary_free_runs', record)
             except Exception as e:
-                record.update(status='failed', message=safe_error(e))
+                # Keep the original source error; add the logging failure after it.
+                db_failed = True
+                record['status'] = 'failed'
+                record['message'] = (record.get('message', '') + ' | run log not saved: ' + safe_error(e)).strip(' |')
         results.append(record)
         print(json.dumps(record), flush=True)
+        if record['status'] != 'succeeded':
+            print(f"::warning title=Source {record['source_key']} {record['status']}::{record.get('message', '')}")
+    reminders = 'skipped (dry run)'
+    if db:
+        try:
+            reminders = str(db.rpc('cr_generate_reminders')) + ' reminder(s) created'
+        except Exception as e:
+            reminders = 'failed: ' + safe_error(e)
+            print(f'::warning title=Reminders::{reminders}')
+    print('reminders: ' + reminders)
     summary = '\n'.join(f"- {r['source_key']}: {r['status']}; {r['links_found']} links; {r['inserted_count']} new saved; {r.get('message', '')}" for r in results)
     if os.environ.get('GITHUB_STEP_SUMMARY'):
         with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
-            f.write('## Cruising free checker\n' + summary + '\n\nAll discoveries need review.\n')
-    return 1 if not results or any(r['status'] != 'succeeded' for r in results) else 0
+            f.write('## Cruising free checker\n' + summary + '\n\nReminders: ' + reminders + '\n\nAll discoveries need review.\n')
+    return exit_code(results, db_failed)
 
 if __name__ == '__main__':
     sys.exit(main())
