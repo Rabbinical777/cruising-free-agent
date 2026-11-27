@@ -55,5 +55,186 @@
     "title": "DFFE bursary programme",
     "enabled": true,
     "tier": "official"
+  },
+  {
+    "key": "nedbank",
+    "url": "https://group.nedbank.co.za/careers/graduates-and-bursaries.html",
+    "hosts": [
+      "group.nedbank.co.za",
+      "personal.nedbank.co.za",
+      "www.nedbank.co.za",
+      "nedbank.co.za"
+    ],
+    "kind": "programme",
+    "title": "Nedbank graduate and bursary programmes",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "standard_bank",
+    "url": "https://careers.standardbank.com/sbg/standard-bank-group/careers/early-careers/bursaries",
+    "hosts": [
+      "careers.standardbank.com",
+      "www.standardbank.com",
+      "standardbank.com"
+    ],
+    "kind": "programme",
+    "title": "Standard Bank Group bursaries",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "absa",
+    "url": "https://www.absa.africa/careers/graduate-opportunities/",
+    "hosts": [
+      "www.absa.africa",
+      "absa.africa"
+    ],
+    "kind": "programme",
+    "title": "Absa graduate opportunities",
+    "enabled": true,
+    "tier": "official",
+    "note": "Graduate page; bursary content not yet confirmed. Find Absa's own bursary page."
+  },
+  {
+    "key": "harmony",
+    "url": "https://www.harmony.co.za/careers/opportunities-for-students/",
+    "hosts": [
+      "www.harmony.co.za",
+      "harmony.co.za"
+    ],
+    "kind": "programme",
+    "title": "Harmony Gold student opportunities",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "valterra_platinum",
+    "url": "https://www.valterraplatinum.com/working-here/young-talent/",
+    "hosts": [
+      "www.valterraplatinum.com",
+      "valterraplatinum.com"
+    ],
+    "kind": "programme",
+    "title": "Valterra Platinum young talent",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "implats",
+    "url": "https://www.implats.co.za/young-talent.php",
+    "hosts": [
+      "www.implats.co.za",
+      "implats.co.za"
+    ],
+    "kind": "programme",
+    "title": "Implats young talent and bursaries",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "sasol_students",
+    "url": "https://sasol.com/careers/careers/students",
+    "hosts": [
+      "sasol.com",
+      "www.sasol.com"
+    ],
+    "kind": "programme",
+    "title": "Sasol student programmes and bursaries",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "transnet",
+    "url": "https://www.transnet.net/YouthDevelopmentProgrammes",
+    "hosts": [
+      "www.transnet.net",
+      "transnet.net"
+    ],
+    "kind": "programme",
+    "title": "Transnet youth development programmes",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "vodacom",
+    "url": "https://www.vodacom.com/bursary-programme.php",
+    "hosts": [
+      "www.vodacom.com",
+      "vodacom.com"
+    ],
+    "kind": "programme",
+    "title": "Vodacom external bursary programme",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "nsfas",
+    "url": "https://www.nsfas.org.za/content/index.html",
+    "hosts": [
+      "www.nsfas.org.za",
+      "nsfas.org.za"
+    ],
+    "kind": "programme",
+    "title": "NSFAS funding",
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "funza_lushaka_dbe",
+    "url": "https://www.education.gov.za/Programmes/FunzaLushaka.aspx",
+    "hosts": [
+      "www.education.gov.za",
+      "education.gov.za"
+    ],
+    "kind": "programme",
+    "title": "Funza Lushaka Bursary Scheme (Department of Basic Education page)",
+    "enabled": true,
+    "tier": "official",
+    "note": "Backup for funza_lushaka, whose own site fails TLS verification."
+  },
+  {
+    "key": "wits",
+    "url": "https://www.wits.ac.za/study-at-wits/financial-aid-and-scholarships-administration/scholarships-and-bursaries/",
+    "hosts": [
+      "www.wits.ac.za",
+      "wits.ac.za"
+    ],
+    "detail_limit": 4,
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "uct",
+    "url": "https://uct.ac.za/dsa/student-funding-administration/bursary-noticeboard",
+    "hosts": [
+      "uct.ac.za",
+      "www.uct.ac.za",
+      "connect.uct.ac.za"
+    ],
+    "detail_limit": 4,
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "uj",
+    "url": "https://www.uj.ac.za/admission-aid/external-bursaries/",
+    "hosts": [
+      "www.uj.ac.za",
+      "uj.ac.za"
+    ],
+    "detail_limit": 4,
+    "enabled": true,
+    "tier": "official"
+  },
+  {
+    "key": "nwu",
+    "url": "https://studies.nwu.ac.za/financial-support-services/bursaries-undergraduate-studies",
+    "hosts": [
+      "studies.nwu.ac.za"
+    ],
+    "detail_limit": 4,
+    "enabled": true,
+    "tier": "official"
   }
 ]
