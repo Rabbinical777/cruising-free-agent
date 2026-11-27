@@ -6,7 +6,9 @@
       "studytrust.org.za",
       "www.studytrust.org.za"
     ],
-    "enabled": true
+    "enabled": true,
+    "tier": "lead",
+    "note": "Aggregator: lead only. Trace to the original provider before verifying."
   },
   {
     "key": "careerwise",
@@ -15,7 +17,9 @@
       "careerwise.co.za",
       "www.careerwise.co.za"
     ],
-    "enabled": true
+    "enabled": true,
+    "tier": "lead",
+    "note": "Aggregator: lead only. Trace to the original provider before verifying."
   },
   {
     "key": "zabursaries",
@@ -25,7 +29,8 @@
       "zabursaries.co.za"
     ],
     "enabled": false,
-    "note": "Disabled: automated request returned HTTP 406. Do not bypass blocks."
+    "note": "Disabled: automated request returned HTTP 406. Do not bypass blocks. Aggregator: lead only. Trace to the original provider before verifying.",
+    "tier": "lead"
   },
   {
     "key": "funza_lushaka",
@@ -36,7 +41,8 @@
     ],
     "kind": "programme",
     "title": "Funza Lushaka Bursary Programme",
-    "enabled": true
+    "enabled": true,
+    "tier": "official"
   },
   {
     "key": "dffe",
@@ -47,6 +53,7 @@
     ],
     "kind": "programme",
     "title": "DFFE bursary programme",
-    "enabled": true
+    "enabled": true,
+    "tier": "official"
   }
 ]
